@@ -3,7 +3,7 @@ import Layout from "../components/Layout";
 import { StatusBadge, PriorityBadge, OverdueBadge } from "../components/Badges";
 import * as api from "../api/endpoints";
 import toast from "react-hot-toast";
-import { ImageIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { ImageIcon, ChevronDown, ChevronUp, X } from "lucide-react";
 
 const CATEGORIES = ["Plumbing", "Electrical", "Security", "Housekeeping", "Parking", "Other"];
 const STATUSES = ["Open", "In Progress", "Resolved"];
@@ -17,6 +17,7 @@ export default function AdminComplaints() {
   const [statusFilter, setStatusFilter] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [statusDraft, setStatusDraft] = useState("");
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const loadComplaints = () => {
     setLoading(true);
@@ -33,6 +34,16 @@ export default function AdminComplaints() {
     loadComplaints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryFilter, statusFilter]);
+
+  // close lightbox on Escape key
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setLightboxUrl(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightboxUrl]);
 
   const toggleExpand = (c) => {
     if (expanded === c.id) {
@@ -142,11 +153,20 @@ export default function AdminComplaints() {
               {expanded === c.id && (
                 <div className="border-t border-slate-100 px-5 py-4 bg-slate-50 space-y-5">
                   {c.photo_url && (
-                    <img
-                      src={c.photo_url}
-                      alt="Complaint"
-                      className="w-full max-w-xs rounded-lg border border-slate-200"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setLightboxUrl(c.photo_url)}
+                      className="block cursor-zoom-in group relative w-full max-w-xs"
+                    >
+                      <img
+                        src={c.photo_url}
+                        alt="Complaint"
+                        className="w-full rounded-lg border border-slate-200 group-hover:opacity-90 transition-opacity"
+                      />
+                      <span className="absolute bottom-2 right-2 bg-slate-900/70 text-white text-[11px] px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                        Click to zoom
+                      </span>
+                    </button>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
@@ -209,7 +229,7 @@ export default function AdminComplaints() {
                     <div className="space-y-3">
                       {c.history.map((h) => (
                         <div key={h.id} className="flex gap-3">
-                          <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                          <div className="w-2 h-2 rounded-full bg-blue-600 mt-1.5 shrink-0" />
                           <div>
                             <div className="flex items-center gap-2">
                               <StatusBadge status={h.status} />
@@ -229,6 +249,29 @@ export default function AdminComplaints() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Lightbox overlay */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-5 right-5 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
+            aria-label="Close"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Complaint full size"
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-full rounded-lg shadow-2xl"
+          />
         </div>
       )}
     </Layout>
