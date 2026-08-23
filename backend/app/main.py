@@ -11,7 +11,10 @@ app = FastAPI(title="Society Maintenance Tracker API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten to FRONTEND_URL in production if desired
+    allow_origins=[
+        "http://localhost:5173",
+        "https://society-maintenance-tracker-delta-three.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
