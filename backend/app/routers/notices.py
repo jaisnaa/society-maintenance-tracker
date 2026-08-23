@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,6 +15,16 @@ def _to_out(notice: Notice) -> NoticeOut:
     data = NoticeOut.model_validate(notice)
     data.posted_by_name = notice.posted_by_user.name if notice.posted_by_user else None
     return data
+
+
+def _send_important_notice_emails(recipient_emails: List[str], title: str, content: str):
+    """Runs after the response has already been sent to the frontend."""
+    for email in recipient_emails:
+        try:
+            notify_important_notice(email, title, content)
+        except Exception as e:
+            # Don't let one failed email break the rest of the batch
+            print(f"Failed to send notice email to {email}: {e}")
 
 
 @router.get("", response_model=List[NoticeOut])
@@ -34,6 +44,7 @@ def list_notices(
 @router.post("", response_model=NoticeOut)
 def create_notice(
     payload: NoticeCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -49,8 +60,10 @@ def create_notice(
 
     if payload.is_important:
         residents = db.query(User).filter(User.role == "resident").all()
-        for resident in residents:
-            notify_important_notice(resident.email, notice.title, notice.content)
+        recipient_emails = [r.email for r in residents]
+        background_tasks.add_task(
+            _send_important_notice_emails, recipient_emails, notice.title, notice.content
+        )
 
     return _to_out(notice)
 
