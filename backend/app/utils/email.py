@@ -1,31 +1,42 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests
 
 from app.config import settings
+
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def send_email(to_email: str, subject: str, body: str):
     """
-    Sends an email via SMTP. Fails silently (logs to console) if
-    mail credentials aren't configured, so the app doesn't crash
-    in dev/demo environments without email set up.
+    Sends an email via Brevo's HTTP API. Fails silently (logs to console) if
+    the API key isn't configured, so the app doesn't crash in dev/demo
+    environments without email set up. Uses HTTPS instead of raw SMTP so it
+    works on hosts (like Render's free tier) that block outbound SMTP ports.
     """
-    if not settings.MAIL_USERNAME or not settings.MAIL_PASSWORD:
-        print(f"[EMAIL SKIPPED - no credentials configured] To: {to_email} | Subject: {subject}")
+    if not settings.BREVO_API_KEY:
+        print(f"[EMAIL SKIPPED - no Brevo API key configured] To: {to_email} | Subject: {subject}")
         return
 
     try:
-        msg = MIMEMultipart()
-        msg["From"] = settings.MAIL_FROM or settings.MAIL_USERNAME
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-
-        with smtplib.SMTP(settings.MAIL_SERVER, settings.MAIL_PORT) as server:
-            server.starttls()
-            server.login(settings.MAIL_USERNAME, settings.MAIL_PASSWORD)
-            server.sendmail(msg["From"], to_email, msg.as_string())
+        response = requests.post(
+            BREVO_API_URL,
+            headers={
+                "accept": "application/json",
+                "api-key": settings.BREVO_API_KEY,
+                "content-type": "application/json",
+            },
+            json={
+                "sender": {
+                    "name": "Society Maintenance Tracker",
+                    "email": settings.MAIL_FROM,
+                },
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "textContent": body,
+            },
+            timeout=15,
+        )
+        if response.status_code >= 400:
+            print(f"[EMAIL ERROR] Failed to send to {to_email}: {response.status_code} {response.text}")
     except Exception as e:
         # Don't let email failures break the main request flow
         print(f"[EMAIL ERROR] Failed to send to {to_email}: {e}")

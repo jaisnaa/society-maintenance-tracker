@@ -22,6 +22,8 @@ class Settings:
     MAIL_SERVER: str = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_PORT: int = int(os.getenv("MAIL_PORT", "587"))
 
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
+
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 
