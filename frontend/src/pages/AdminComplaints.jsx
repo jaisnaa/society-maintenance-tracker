@@ -1,20 +1,37 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
-import { StatusBadge, PriorityBadge, OverdueBadge } from "../components/Badges";
+import { PriorityBadge, OverdueBadge } from "../components/Badges";
 import * as api from "../api/endpoints";
 import toast from "react-hot-toast";
-import { ImageIcon, ChevronDown, ChevronUp, X } from "lucide-react";
+import { ImageIcon, X, Clock } from "lucide-react";
 
 const CATEGORIES = ["Plumbing", "Electrical", "Security", "Housekeeping", "Parking", "Other"];
 const STATUSES = ["Open", "In Progress", "Resolved"];
 const PRIORITIES = ["Low", "Medium", "High"];
 
+const COLUMN_STYLES = {
+  Open: {
+    headerBg: "bg-blue-50",
+    headerText: "text-blue-700",
+    dot: "bg-blue-400",
+  },
+  "In Progress": {
+    headerBg: "bg-blue-100",
+    headerText: "text-blue-800",
+    dot: "bg-blue-600",
+  },
+  Resolved: {
+    headerBg: "bg-slate-100",
+    headerText: "text-slate-700",
+    dot: "bg-[#0f2a5c]",
+  },
+};
+
 export default function AdminComplaints() {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [selected, setSelected] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [statusDraft, setStatusDraft] = useState("");
   const [lightboxUrl, setLightboxUrl] = useState(null);
@@ -23,7 +40,6 @@ export default function AdminComplaints() {
     setLoading(true);
     const params = {};
     if (categoryFilter) params.category = categoryFilter;
-    if (statusFilter) params.status = statusFilter;
     api
       .getAllComplaints(params)
       .then((res) => setComplaints(res.data))
@@ -33,48 +49,68 @@ export default function AdminComplaints() {
   useEffect(() => {
     loadComplaints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilter, statusFilter]);
+  }, [categoryFilter]);
 
-  // close lightbox on Escape key
   useEffect(() => {
-    if (!lightboxUrl) return;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") setLightboxUrl(null);
+      if (e.key === "Escape") {
+        if (lightboxUrl) setLightboxUrl(null);
+        else if (selected) setSelected(null);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightboxUrl]);
+  }, [lightboxUrl, selected]);
 
-  const toggleExpand = (c) => {
-    if (expanded === c.id) {
-      setExpanded(null);
-    } else {
-      setExpanded(c.id);
-      setStatusDraft(c.status);
-      setNoteDraft("");
-    }
+  const openDetail = (c) => {
+    setSelected(c);
+    setStatusDraft(c.status);
+    setNoteDraft("");
   };
 
-  const handleStatusUpdate = async (id) => {
+  const closeDetail = () => {
+    setSelected(null);
+    setNoteDraft("");
+  };
+
+  const refreshSelected = (updated) => {
+    setComplaints((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSelected(updated);
+  };
+
+  const handleStatusUpdate = async () => {
     try {
-      await api.updateComplaintStatus(id, { status: statusDraft, note: noteDraft || null });
+      const res = await api.updateComplaintStatus(selected.id, {
+        status: statusDraft,
+        note: noteDraft || null,
+      });
       toast.success("Status updated");
       setNoteDraft("");
       loadComplaints();
+      if (res?.data) refreshSelected(res.data);
+      else closeDetail();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Failed to update status");
     }
   };
 
-  const handlePriorityUpdate = async (id, priority) => {
+  const handlePriorityUpdate = async (priority) => {
     try {
-      await api.updateComplaintPriority(id, { priority });
+      const res = await api.updateComplaintPriority(selected.id, { priority });
       toast.success("Priority updated");
       loadComplaints();
+      if (res?.data) refreshSelected(res.data);
     } catch {
       toast.error("Failed to update priority");
     }
   };
+
+  const columns = STATUSES.map((status) => ({
+    status,
+    items: complaints
+      .filter((c) => c.status === status)
+      .sort((a, b) => (b.is_overdue === a.is_overdue ? 0 : b.is_overdue ? 1 : -1)),
+  }));
 
   return (
     <Layout>
@@ -82,7 +118,7 @@ export default function AdminComplaints() {
         All Complaints
       </h1>
       <p className="text-slate-500 text-sm mb-6">
-        Overdue complaints are surfaced at the top
+        Click any complaint to manage it
       </p>
 
       <div className="flex gap-3 mb-5">
@@ -96,166 +132,201 @@ export default function AdminComplaints() {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
       </div>
 
       {loading ? (
         <p className="text-slate-400 text-sm">Loading...</p>
       ) : complaints.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500">
-          No complaints match these filters.
+          No complaints match this filter.
         </div>
       ) : (
-        <div className="space-y-3">
-          {complaints.map((c) => (
-            <div
-              key={c.id}
-              className={`bg-white rounded-xl border overflow-hidden ${
-                c.is_overdue ? "border-red-300" : "border-slate-200"
-              }`}
-            >
-              <button
-                onClick={() => toggleExpand(c)}
-                className="w-full flex items-start justify-between p-5 text-left hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <span className="text-xs font-medium text-slate-400">#{c.id}</span>
-                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                      {c.category}
-                    </span>
-                    <StatusBadge status={c.status} />
-                    <PriorityBadge priority={c.priority} />
-                    {c.is_overdue && <OverdueBadge />}
-                    {c.photo_url && <ImageIcon size={14} className="text-slate-400" />}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+          {columns.map(({ status, items }) => {
+            const style = COLUMN_STYLES[status];
+            return (
+              <div key={status} className="bg-slate-50 rounded-xl border border-slate-200 flex flex-col">
+                <div className={`flex items-center justify-between px-4 py-3 rounded-t-xl ${style.headerBg}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                    <span className={`text-sm font-semibold ${style.headerText}`}>{status}</span>
                   </div>
-                  <p className="text-slate-800 text-sm">{c.description}</p>
-                  <p className="text-xs text-slate-400 mt-1.5">
-                    {c.resident_name} · Raised {new Date(c.created_at).toLocaleDateString()}
-                  </p>
+                  <span className={`text-xs font-medium ${style.headerText} bg-white/70 px-2 py-0.5 rounded-full`}>
+                    {items.length}
+                  </span>
                 </div>
-                {expanded === c.id ? (
-                  <ChevronUp size={18} className="text-slate-400 shrink-0 ml-3" />
-                ) : (
-                  <ChevronDown size={18} className="text-slate-400 shrink-0 ml-3" />
-                )}
-              </button>
 
-              {expanded === c.id && (
-                <div className="border-t border-slate-100 px-5 py-4 bg-slate-50 space-y-5">
-                  {c.photo_url && (
-                    <button
-                      type="button"
-                      onClick={() => setLightboxUrl(c.photo_url)}
-                      className="block cursor-zoom-in group relative w-full max-w-xs"
-                    >
-                      <img
-                        src={c.photo_url}
-                        alt="Complaint"
-                        className="w-full rounded-lg border border-slate-200 group-hover:opacity-90 transition-opacity"
-                      />
-                      <span className="absolute bottom-2 right-2 bg-slate-900/70 text-white text-[11px] px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
-                        Click to zoom
-                      </span>
-                    </button>
+                <div className="p-3 space-y-3 min-h-[120px]">
+                  {items.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-6">Nothing here</p>
+                  ) : (
+                    items.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => openDetail(c)}
+                        className={`w-full text-left bg-white rounded-lg border p-3.5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all ${
+                          c.is_overdue ? "border-red-300" : "border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                          <span className="text-[11px] font-medium text-slate-400">#{c.id}</span>
+                          <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {c.category}
+                          </span>
+                          <PriorityBadge priority={c.priority} />
+                          {c.is_overdue && <OverdueBadge />}
+                          {c.photo_url && <ImageIcon size={12} className="text-slate-400" />}
+                        </div>
+                        <p className="text-sm text-slate-800 font-medium line-clamp-2 mb-1.5">
+                          {c.description}
+                        </p>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                          <Clock size={11} />
+                          {c.resident_name} · {new Date(c.created_at).toLocaleDateString()}
+                        </div>
+                      </button>
+                    ))
                   )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                        Priority
-                      </label>
-                      <div className="flex gap-1.5">
-                        {PRIORITIES.map((p) => (
-                          <button
-                            key={p}
-                            onClick={() => handlePriorityUpdate(c.id, p)}
-                            className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-                              c.priority === p
-                                ? "bg-slate-900 text-white border-slate-900"
-                                : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
+      {/* Detail modal */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={closeDetail}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-slate-400">#{selected.id}</span>
+                <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                  {selected.category}
+                </span>
+                {selected.is_overdue && <OverdueBadge />}
+              </div>
+              <button
+                onClick={closeDetail}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md hover:bg-slate-100 transition-colors"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <p className="text-slate-800 text-sm">{selected.description}</p>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  {selected.resident_name} · Raised {new Date(selected.created_at).toLocaleDateString()}
+                </p>
+              </div>
+
+              {selected.photo_url && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxUrl(selected.photo_url)}
+                  className="block cursor-zoom-in group relative w-full max-w-xs"
+                >
+                  <img
+                    src={selected.photo_url}
+                    alt="Complaint"
+                    className="w-full rounded-lg border border-slate-200 group-hover:opacity-90 transition-opacity"
+                  />
+                  <span className="absolute bottom-2 right-2 bg-slate-900/70 text-white text-[11px] px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                    Click to zoom
+                  </span>
+                </button>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  Priority
+                </label>
+                <div className="flex gap-1.5">
+                  {PRIORITIES.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handlePriorityUpdate(p)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                        selected.priority === p
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  Update Status
+                </label>
+                <div className="flex flex-col gap-2">
+                  <select
+                    value={statusDraft}
+                    onChange={(e) => setStatusDraft(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Optional note..."
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  />
+                  <button
+                    onClick={handleStatusUpdate}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                  Status History
+                </p>
+                <div className="space-y-3">
+                  {selected.history.map((h) => (
+                    <div key={h.id} className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-blue-600 mt-1.5 shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-slate-700">{h.status}</span>
+                          <span className="text-xs text-slate-400">
+                            {new Date(h.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {h.note && <p className="text-sm text-slate-600 mt-1">{h.note}</p>}
                       </div>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                      Update Status
-                    </label>
-                    <div className="flex gap-2">
-                      <select
-                        value={statusDraft}
-                        onChange={(e) => setStatusDraft(e.target.value)}
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                      >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        placeholder="Optional note..."
-                        value={noteDraft}
-                        onChange={(e) => setNoteDraft(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
-                      />
-                      <button
-                        onClick={() => handleStatusUpdate(c.id)}
-                        className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
-                      >
-                        Update
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                      Status History
-                    </p>
-                    <div className="space-y-3">
-                      {c.history.map((h) => (
-                        <div key={h.id} className="flex gap-3">
-                          <div className="w-2 h-2 rounded-full bg-blue-600 mt-1.5 shrink-0" />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <StatusBadge status={h.status} />
-                              <span className="text-xs text-slate-400">
-                                {new Date(h.timestamp).toLocaleString()}
-                              </span>
-                            </div>
-                            {h.note && (
-                              <p className="text-sm text-slate-600 mt-1">{h.note}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
       {/* Lightbox overlay */}
       {lightboxUrl && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
+          className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6"
           onClick={() => setLightboxUrl(null)}
         >
           <button
