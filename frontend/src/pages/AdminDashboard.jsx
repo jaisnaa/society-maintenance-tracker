@@ -14,7 +14,7 @@ import {
   Pie,
   Legend,
 } from "recharts";
-import { AlertTriangle, FileText, Clock, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, FileText, Clock, CheckCircle2, AlarmClock } from "lucide-react";
 
 // All-blue palette — light slate-blue -> mid blue -> deep navy
 const STATUS_COLORS = {
@@ -90,6 +90,14 @@ export default function AdminDashboard() {
       iconColor: "text-white",
       accent: "before:bg-[#0f2a5c]",
     },
+    {
+      label: "Overdue",
+      value: data.overdue_count,
+      icon: AlarmClock,
+      iconBg: "bg-red-100",
+      iconColor: "text-red-600",
+      accent: "before:bg-red-400",
+    },
   ];
 
   return (
@@ -112,7 +120,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           {statCards.map(({ label, value, icon: Icon, iconBg, iconColor, accent }) => (
             <div
               key={label}
