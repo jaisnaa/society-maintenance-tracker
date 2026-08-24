@@ -42,40 +42,7 @@ The admin dashboard provides a quick overview of the society's maintenance activ
 Total number of complaints
 Complaints by status
 Complaints by category
-Number of overdue complaints
-
-Project Structure:
-society-maintenance-tracker/
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── models/
-│   │   │   └── models.py
-│   │   ├── schemas/
-│   │   │   └── schemas.py
-│   │   ├── routers/
-│   │   │   ├── auth.py
-│   │   │   ├── complaints.py
-│   │   │   ├── notices.py
-│   │   │   └── dashboard.py
-│   │   └── utils/
-│   │       ├── security.py
-│   │       └── email.py
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   ├── components/
-│   │   ├── context/
-│   │   │   └── AuthContext.jsx
-│   │   └── api/
-│   │       └── endpoints.js
-│   └── package.json
-│
-└── README.md
+Number of overdue complaint.
 
 Backend Setup:
 cd backend
