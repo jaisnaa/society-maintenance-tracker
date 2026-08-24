@@ -55,6 +55,20 @@ export default function NoticeBoard() {
     }
   };
 
+  const formatPostedAt = (dateStr) => {
+    const d = new Date(dateStr);
+    const datePart = d.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${datePart} · ${timePart}`;
+  };
+
   return (
     <Layout>
       <div className="flex items-center justify-between mb-6">
@@ -88,7 +102,7 @@ export default function NoticeBoard() {
             placeholder="Notice title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
           <textarea
             required
@@ -96,7 +110,7 @@ export default function NoticeBoard() {
             placeholder="Notice content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
           />
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
@@ -128,24 +142,28 @@ export default function NoticeBoard() {
           {notices.map((n) => (
             <div
               key={n.id}
-              className={`bg-white rounded-xl border p-5 ${
-                n.is_important ? "border-amber-300 bg-amber-50/40" : "border-slate-200"
+              className={`bg-white rounded-xl p-5 ${
+                n.is_important
+                  ? "border border-slate-200 border-l-[3px] border-l-blue-600"
+                  : "border border-slate-200"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1.5">
                     {n.is_important && (
-                      <Pin size={14} className="text-amber-600" />
+                      <span className="flex items-center gap-1 bg-blue-50 text-blue-700 text-[11px] font-semibold px-2 py-0.5 rounded">
+                        <Pin size={11} />
+                        Pinned
+                      </span>
                     )}
                     <h3 className="font-semibold text-slate-900">{n.title}</h3>
                   </div>
                   <p className="text-sm text-slate-600 whitespace-pre-wrap">
                     {n.content}
                   </p>
-                  <p className="text-xs text-slate-400 mt-2">
-                    Posted by {n.posted_by_name} ·{" "}
-                    {new Date(n.created_at).toLocaleDateString()}
+                  <p className="text-xs text-slate-400 mt-2.5">
+                    Posted by {n.posted_by_name} · {formatPostedAt(n.created_at)}
                   </p>
                 </div>
                 {user?.role === "admin" && (
